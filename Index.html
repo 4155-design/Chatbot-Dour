@@ -1,1 +1,206 @@
-<h1>Hi</h1>
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DOUR AI</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #101014;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+header {
+  padding: 20px;
+  text-align: center;
+  background: #191820;
+  font-size: 25px;
+  font-weight: bold;
+}
+header span { color: #9870ff; }
+#status {
+  padding: 12px;
+  text-align: center;
+  color: #aaa;
+  font-size: 13px;
+}
+#chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.message {
+  max-width: 88%;
+  padding: 13px;
+  border-radius: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.user {
+  align-self: flex-end;
+  background: #7253dc;
+}
+.bot {
+  align-self: flex-start;
+  background: #26242e;
+}
+#bottom {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  background: #191820;
+}
+input {
+  flex: 1;
+  min-width: 0;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid #494451;
+  background: #292630;
+  color: white;
+  font-size: 16px;
+}
+button {
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: #8968ef;
+  color: white;
+  font-size: 15px;
+}
+button:disabled { opacity: .5; }
+</style>
+</head>
+<body>
+
+<header>✦ DOUR <span>AI</span></header>
+<div id="status">KI wird vorbereitet ...</div>
+
+<div id="chat">
+  <div class="message bot">
+    Willkommen bei DOUR AI! Was möchtest du wissen?
+  </div>
+</div>
+
+<div id="bottom">
+  <input id="input" placeholder="Schreibe eine Nachricht..." />
+  <button id="send" disabled>Senden</button>
+</div>
+
+<script type="module">
+const status = document.getElementById("status");
+const chat = document.getElementById("chat");
+const input = document.getElementById("input");
+const send = document.getElementById("send");
+
+let ai = null;
+let busy = false;
+
+const history = [{
+  role: "system",
+  content: "Du bist DOUR AI, ein hilfreicher KI-Assistent. Antworte auf Deutsch und hilf bei Fragen, Texten und Programmierung."
+}];
+
+function addMessage(text, type) {
+  const div = document.createElement("div");
+  div.className = "message " + type;
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+async function loadAI() {
+  try {
+    status.textContent = "KI-Bibliothek wird geladen ...";
+
+    const { pipeline } = await import(
+      "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3"
+    );
+
+    status.textContent = "KI-Modell wird heruntergeladen ...";
+
+    ai = await pipeline(
+      "text-generation",
+      "onnx-community/Qwen2.5-0.5B-Instruct",
+      { dtype: "q4" }
+    );
+
+    status.textContent = "● DOUR AI ist bereit";
+    send.disabled = false;
+
+  } catch (error) {
+    console.error(error);
+    status.textContent = "KI konnte nicht geladen werden";
+    addMessage(
+      "Das KI-Modell konnte nicht gestartet werden. Öffne die Browser-Konsole für die genaue Fehlermeldung und prüfe deine Internetverbindung.",
+      "bot"
+    );
+  }
+}
+
+async function sendMessage() {
+  const question = input.value.trim();
+  if (!question || !ai || busy) return;
+
+  busy = true;
+  send.disabled = true;
+  input.value = "";
+
+  addMessage(question, "user");
+  history.push({ role: "user", content: question });
+
+  const answerBox = addMessage("DOUR AI denkt nach ...", "bot");
+
+  try {
+    const result = await ai(history, {
+      max_new_tokens: 180,
+      temperature: 0.7
+    });
+
+    const generated = result[0].generated_text;
+    let answer = "";
+
+    if (Array.isArray(generated)) {
+      answer = generated[generated.length - 1]?.content || "";
+    } else if (typeof generated === "string") {
+      answer = generated;
+    }
+
+    if (!answer) {
+      answer = "Ich konnte gerade keine Antwort erstellen.";
+    }
+
+    answerBox.textContent = answer;
+    history.push({ role: "assistant", content: answer });
+
+  } catch (error) {
+    console.error(error);
+    answerBox.textContent = "Beim Erstellen der Antwort ist ein Fehler aufgetreten.";
+    history.pop();
+  }
+
+  busy = false;
+  send.disabled = false;
+  input.focus();
+}
+
+send.addEventListener("click", sendMessage);
+input.addEventListener("keydown", event => {
+  if (event.key === "Enter") sendMessage();
+});
+
+loadAI();
+</script>
+</body>
+</html>
+
